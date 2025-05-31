@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content=
+  "width=device-width, initial-scale=1.0">
+  <title>Music Player</title>
+  <link rel="stylesheet" href=
+  "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: rgb(240, 247, 250);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            /* max-width: 500px; */
+            width: 500px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        #songForm {
+            display: flex;
+        }
+        #query {
+            flex-grow: 1;
+            height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 5px 0 0 5px;
+            padding: 0 10px;
+        }
+        #submitbtn {
+            height: 40px;
+            width: 90px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
+        }
+        .player {
+            display: flex;
+            align-items: center;
+        }
+        #songImage {
+            width: 250px; /* Adjusted for better layout */
+            border-radius: 10px;
+            margin-right: 20px;
+        }
+        .details {
+            display: flex;
+            flex-direction: column;
+        }
+        .controls {
+            width: 150px;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        #nextBtn:hover, #playPauseBtn:hover, #prevBtn:hover{
+            cursor: pointer;
+        }
+        #progressBar {
+            width: 160px;
+            margin: 20px 0px 20px 0px;
+            color: blue;
+        }
+        .loading {
+            margin-top: 20px;
+            text-align: center;
+            color: #007bff;
+        }
+        #verti{
+            margin-top: 20px;
+            width: 250px;
+            height: 250px;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+  </style>
+</head>
+<body>
+  <div id="content">
+    <form id="songForm" name="songForm">
+      <input type="text" id="query" placeholder="Enter song name"
+      required=""> <button id="submitbtn" type=
+      "submit">Search</button>
+    </form>
+    <div id="playerContent"></div>
+  </div>
+  <script>
+        const playerContent = document.getElementById('playerContent');
+        let audio;
+
+        document.getElementById('songForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const query = document.getElementById('query').value;
+            playerContent.innerHTML = '<p class="loading">Loading...</p>'; // Show loading message
+
+            try {
+                const songData = await getSongData(query);
+                if (songData && songData.data.results.length > 0) {
+                    const songDetails = extractSongDetails(songData);
+                    updateHTML(songDetails);
+                } else {
+                    playerContent.innerHTML = '<p>No results found. Please try another search.</p>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                playerContent.innerHTML = '<p>An error occurred. Please try again.</p>';
+            }
+        });
+
+        async function getSongData(text) {
+            const url = "https://saavn.dev/api/search/songs";
+            const response = await fetch(`${url}?${new URLSearchParams({ query: text })}`, {
+                method: 'GET',
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+
+            return await response.json();
+        }
+
+        function extractSongDetails(data) {
+            const song = data.data.results[0];
+            return {
+                songname: song.name,
+                artist: song.artists.primary[0].name,
+                songurl: song.downloadUrl.find(item => item.quality === '320kbps').url,
+                imgurll: song.image.find(image => image.quality === "500x500").url
+            };
+        }
+
+        function updateHTML(details) {
+            playerContent.innerHTML = `
+           <div class="player">
+                <img id="songImage" src="${details.imgurll}" alt="Song Image">
+                <div id="verti">
+                    <div class="details">
+                        <h2 id="songName">${details.songname}</h2>
+                        <p id="artistName">${details.artist}</p>
+                    </div>
+                    <div>
+                        <input type="range" id="progressBar" value="0" max="100">
+                    </div>
+                    <div class="controls">
+                        <div id="prevBtn"><i class="fa fa-step-backward fa-lg"></i></div>
+                        <div id="playPauseBtn"><i class="fa fa-play fa-lg"></i></div>
+                        <div id="nextBtn"><i class="fa fa-step-forward fa-lg"></i></div>
+                    </div>
+                </div>
+            </div>
+            <audio src="${details.songurl}" loop id="audio"></audio>
+            `;
+
+            if (audio) {
+                audio.pause();
+                audio.src = details.songurl;
+                audio.load(); // Load the new audio
+            } else {
+                audio = new Audio(details.songurl);
+            }
+
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const progressBar = document.getElementById('progressBar');
+
+            // Cleanup previous event listeners
+            playPauseBtn.removeEventListener('click', togglePlayPause);
+            progressBar.removeEventListener('input', seek);
+
+            playPauseBtn.addEventListener('click', togglePlayPause);
+            audio.addEventListener('timeupdate', updateProgress);
+            progressBar.addEventListener('input', seek);
+
+            // Existing togglePlayPause function
+            function togglePlayPause() {
+                if (audio.paused) {
+                    audio.play();
+                    playPauseBtn.innerHTML = '<i class="fa fa-pause fa-lg"></i>';
+                } else {
+                    audio.pause();
+                    playPauseBtn.innerHTML = '<i class="fa fa-play fa-lg"></i>';
+                }
+            }
+
+            // Event listener for button click
+            playPauseBtn.addEventListener('click', togglePlayPause);
+
+            // Event listener for space key
+            document.addEventListener('keydown', (event) => {
+                // Check if the focused element is not an input or textarea
+                const focusedElement = document.activeElement;
+                if (event.code === 'Space' && focusedElement.tagName !== 'INPUT') {
+                    event.preventDefault(); // Prevent scrolling
+                    togglePlayPause();
+                }
+            });
+
+
+            function updateProgress() {
+                if (audio.duration) {
+                    progressBar.value = (audio.currentTime / audio.duration) * 100;
+                }
+            }
+
+            function seek() {
+                audio.currentTime = (progressBar.value / 100) * audio.duration;
+            }
+        }
+  </script>
+</body>
+</html>
